@@ -82,6 +82,11 @@
                     <button class="oled-btn" id="btn-file">FILE</button>
                     <input type="file" id="file-upload" accept="audio/*" style="display:none;">
                 </div>
+                <div class="oled-row" style="margin-top: 3px;">
+                    <select id="audio-device-select" style="width: 100%; background: #000; color: var(--border-main); border: 1px solid #555; font-family: 'Oswald', sans-serif; font-size: 9px; outline: none; padding: 2px; text-transform: uppercase;">
+                        <option value="">DEFAULT AUDIO INPUT</option>
+                    </select>
+                </div>
             </div>
             
             <div class="knob-group"><div class="knob-container"><div class="knob-label">SUBLIMATE</div><svg class="knob-svg" id="sublimate" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
@@ -214,7 +219,6 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             this.sm_sway = this.slide(sway / 100.0, 22050.0, 22050.0, this.sm_sway);
             this.sm_entropy = this.slide(entropy / 100.0, 22050.0, 22050.0, this.sm_entropy);
 
-            // SMOOTH GHOST MODULATION (Eliminates white noise hiss)
             this.ghost_phase = (this.ghost_phase + (0.2 + this.sm_entropy * 2.0) / sr) % 1.0;
             let bipolar_ghost = Math.sin(this.ghost_phase * this.TWOPI);
             let ghost_mod = bipolar_ghost * Math.pow(this.sm_entropy, 2.0) * 0.5;
@@ -256,7 +260,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
 
             let tank_input = weather_in * (1.0 - this.sm_transmute) + cascade_sig * this.sm_transmute;
 
-            let fb_base = this.scale(n_alembic, 0.0, 1.0, 0.0, 0.975); // 0% alembic = no feedback trap
+            let fb_base = this.scale(n_alembic, 0.0, 1.0, 0.0, 0.975);
             let fb_total = fb_base + (n_rhizome * 0.04);
             let drive = 1.0 + (n_rhizome * 9.0);
 
@@ -354,7 +358,6 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             let compressed_wet = tided_wet * (1.0 * (1.0 - n_distill) + (gain_reduction * 3.0) * n_distill);
             let distilled_wet = Math.tanh(compressed_wet);
 
-            // SMOOTH EQUAL-POWER DRY/WET CROSSFADE (Veil)
             let dry_level = Math.cos(n_veil * Math.PI * 0.5);
             let wet_level = Math.sin(n_veil * Math.PI * 0.5);
 
@@ -433,6 +436,23 @@ function updateColumnGlow(knob) {
 let isRecording = false; let recBuffersL = []; let recBuffersR = []; let recLength = 0;
 let micStream = null, fileSource = null; let extGain = null;
 
+async function loadAudioDevices() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        const select = document.getElementById('audio-device-select');
+        select.innerHTML = '<option value="">DEFAULT AUDIO INPUT</option>';
+        audioInputs.forEach((device, index) => {
+            let opt = document.createElement('option');
+            opt.value = device.deviceId;
+            opt.textContent = device.label || `Audio Interface ${index + 1}`;
+            select.appendChild(opt);
+        });
+    } catch(e) {
+        console.log("Device enumeration error:", e);
+    }
+}
+
 async function initAudio() {
     if (audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -453,6 +473,7 @@ async function initAudio() {
     asperitasNode.connect(recNode); recNode.connect(audioCtx.destination);
     
     isPlaying = true; document.getElementById('btn-activate').classList.add('active'); syncAllParams();
+    loadAudioDevices();
 }
 
 document.querySelectorAll('.knob-svg').forEach(knob => {
@@ -493,12 +514,26 @@ document.getElementById('btn-mic').addEventListener('click', async (e) => {
     if(!audioCtx) await initAudio();
     if(micStream) return;
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const selectedDeviceId = document.getElementById('audio-device-select').value;
+        const constraints = {
+            audio: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         micStream = audioCtx.createMediaStreamSource(stream);
         if(fileSource) { fileSource.disconnect(); fileSource = null; document.getElementById('btn-file').classList.remove('active'); }
         micStream.connect(extGain);
         e.target.classList.add('active');
-    } catch(err) { alert('Microphone access denied or unavailable.'); }
+        loadAudioDevices(); // Refresh labels now that permission is granted
+    } catch(err) { alert('Microphone/Interface access denied or unavailable.'); }
+});
+
+document.getElementById('audio-device-select').addEventListener('change', async (e) => {
+    if(micStream) {
+        micStream.disconnect();
+        micStream = null;
+        document.getElementById('btn-mic').classList.remove('active');
+        document.getElementById('btn-mic').click(); // Re-trigger with new device
+    }
 });
 
 document.getElementById('btn-file').addEventListener('click', () => { document.getElementById('file-upload').click(); });
@@ -554,6 +589,8 @@ document.getElementById('preset-list').addEventListener('change', (e) => {
     if(e.target.value === 'init') return; let state = presets[e.target.value];
     if(state) { for(let key in state) { let el = document.getElementById(key); if(el && el.classList.contains('knob-svg')) setKnobValue(el, state[key]); } }
 });
+
+navigator.mediaDevices.enumerateDevices().then(loadAudioDevices).catch(()=>{});
 </script>
 </body>
 </html>
