@@ -183,7 +183,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
     noise() { return Math.random()*2-1; }
     wrap(v, min, max) { let r=max-min; if(r===0) return min; let res=(v-min)%r; if(res<0) res+=r; return res+min; }
     scale(v, inMin, inMax, outMin, outMax) { return outMin + (v - inMin) / (inMax - inMin) * (outMax - outMin); }
-    clip(v, min, max) { return Math.max(min, Math.max(max, v) === max ? Math.min(max, v) : Math.max(min, v)); } // standard clamp
+    clip(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
     process(ins, outs) {
         const input = ins[0][0]; const outL = outs[0][0]; const outR = outs[0][1];
@@ -193,26 +193,27 @@ class AsperitasProcessor extends AudioWorkletProcessor {
         for (let i = 0; i < outL.length; i++) {
             let in1 = input ? input[i] : 0;
 
-            let sublimate = this.p.sublimate;
-            let alembic = this.p.alembic;
-            let thicket = this.p.thicket;
-            let veil = this.p.veil;
-            let rhizome = this.p.rhizome;
-            let tide = this.p.tide;
-            let sway = this.p.sway;
-            let amber = this.p.amber;
-            let amber2 = this.p.amber2;
-            let transmute = this.p.transmute;
-            let distill = this.p.distill;
-            let ouroboros = this.p.ouroboros;
-            let entropy = this.p.entropy;
-            let undertow = this.p.undertow;
+            // CORRECT PARAMETER SCALING (0-1 from JS scaled to 0-100 for Gen equations)
+            let sublimate = this.p.sublimate * 100.0;
+            let alembic = this.p.alembic * 100.0;
+            let thicket = this.p.thicket * 100.0;
+            let veil = this.p.veil * 100.0;
+            let rhizome = this.p.rhizome * 100.0;
+            let tide = this.p.tide * 100.0;
+            let sway = this.p.sway * 100.0;
+            let amber = this.p.amber; // Button state (0 or 100)
+            let amber2 = this.p.amber2; // Button state (0 or 100)
+            let transmute = this.p.transmute * 100.0;
+            let distill = this.p.distill * 100.0;
+            let ouroboros = this.p.ouroboros * 100.0;
+            let entropy = this.p.entropy * 100.0;
+            let undertow = this.p.undertow * 100.0;
 
-            this.sm_transmute = this.slide(transmute / 100.0, 22050.0, 22050.0);
-            this.sm_sway = this.slide(sway / 100.0, 22050.0, 22050.0);
-            this.sm_entropy = this.slide(entropy / 100.0, 22050.0, 22050.0);
+            this.sm_transmute = this.slide(transmute / 100.0, 22050.0, 22050.0, this.sm_transmute);
+            this.sm_sway = this.slide(sway / 100.0, 22050.0, 22050.0, this.sm_sway);
+            this.sm_entropy = this.slide(entropy / 100.0, 22050.0, 22050.0, this.sm_entropy);
 
-            this.wander = this.slide(this.noise(), 88200.0, 88200.0);
+            this.wander = this.slide(this.noise(), 88200.0, 88200.0, this.wander);
             let bipolar_ghost = (this.wander * 2.0) - 1.0;
             let ghost_mod = bipolar_ghost * Math.pow(this.sm_entropy, 2.0) * 1.2;
 
@@ -288,7 +289,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             this.c4_delay.write(tank_input + this.c4_fb);
 
             let raw_tank = (c1 + c2 + c3 + c4) * 0.25;
-            this.global_tank = raw_tank - this.global_tank + 0.995 * this.global_tank; // dcblock approx
+            this.global_tank = raw_tank - this.global_tank + 0.995 * this.global_tank;
 
             let cutoff_hz = this.scale(Math.max(0, Math.min(1, n_thicket + (ghost_mod*0.6))), 0.0, 1.0, 18000.0, 400.0);
             let alpha = Math.max(0.001, Math.min(1.0, (cutoff_hz / sr) * this.TWOPI));
