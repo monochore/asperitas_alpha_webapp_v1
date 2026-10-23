@@ -151,7 +151,8 @@ class SafeDelay {
         if(isNaN(sAgo)) sAgo = 0; sAgo = Math.max(0, Math.min(sAgo, this.size - 2)); 
         let rPos = this.writeIdx - sAgo; while(rPos < 0) rPos += this.size;
         let i1 = Math.floor(rPos); let i2 = (i1 + 1) % this.size; let frac = rPos - i1;
-        return this.buf[i1] + frac * (this.buf[i2] - this.buf[i1]);
+        let val = this.buf[i1] + frac * (this.buf[i2] - this.buf[i1]);
+        return isNaN(val) ? 0 : val;
     }
 }
 
@@ -166,6 +167,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
         this.rhz_lpf1 = 0; this.rhz_lpf2 = 0; this.rhz_lpf3 = 0; this.rhz_lpf4 = 0;
         this.amb_lpf1 = 0; this.amb_lpf2 = 0;
         this.global_tank = 0; this.ouro_hp_y = 0; this.ouro_lp_y = 0; 
+        this.dc_x = 0; this.dc_y = 0;
         
         this.cascade = new SafeDelay(88200);
         this.c1_delay = new SafeDelay(44100); this.c2_delay = new SafeDelay(44100);
@@ -176,14 +178,13 @@ class AsperitasProcessor extends AudioWorkletProcessor {
         this.sm_transmute = 0; this.sm_sway = 0; this.sm_entropy = 0;
         this.wander = 0; this.ph1 = 0; this.ph2 = 0;
         this.ph_c1 = 0; this.ph_c2 = 0; this.ph_c3 = 0; this.ph_c4 = 0; this.ph_tide = 0;
-        this.swell_env = 0;
+        this.swell_env = 0; this.wet_rms_prev = 0;
         this.TWOPI = Math.PI * 2;
     }
-    slide(t, c, u, d) { if(isNaN(c)) c=0; let diff=t-c; return c+(diff>0?diff/Math.max(1,u):diff/Math.max(1,d)); }
+    slide(t, c, u, d, prev) { if(isNaN(c)) c=0; let diff=t-c; return (diff>0?c+diff/Math.max(1,u):c+diff/Math.max(1,d)); }
     noise() { return Math.random()*2-1; }
     wrap(v, min, max) { let r=max-min; if(r===0) return min; let res=(v-min)%r; if(res<0) res+=r; return res+min; }
     scale(v, inMin, inMax, outMin, outMax) { return outMin + (v - inMin) / (inMax - inMin) * (outMax - outMin); }
-    clip(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
     process(ins, outs) {
         const input = ins[0][0]; const outL = outs[0][0]; const outR = outs[0][1];
@@ -192,8 +193,8 @@ class AsperitasProcessor extends AudioWorkletProcessor {
 
         for (let i = 0; i < outL.length; i++) {
             let in1 = input ? input[i] : 0;
+            if(isNaN(in1)) in1 = 0;
 
-            // CORRECT PARAMETER SCALING (0-1 from JS scaled to 0-100 for Gen equations)
             let sublimate = this.p.sublimate * 100.0;
             let alembic = this.p.alembic * 100.0;
             let thicket = this.p.thicket * 100.0;
@@ -201,8 +202,8 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             let rhizome = this.p.rhizome * 100.0;
             let tide = this.p.tide * 100.0;
             let sway = this.p.sway * 100.0;
-            let amber = this.p.amber; // Button state (0 or 100)
-            let amber2 = this.p.amber2; // Button state (0 or 100)
+            let amber = this.p.amber;
+            let amber2 = this.p.amber2;
             let transmute = this.p.transmute * 100.0;
             let distill = this.p.distill * 100.0;
             let ouroboros = this.p.ouroboros * 100.0;
@@ -289,12 +290,14 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             this.c4_delay.write(tank_input + this.c4_fb);
 
             let raw_tank = (c1 + c2 + c3 + c4) * 0.25;
-            this.global_tank = raw_tank - this.global_tank + 0.995 * this.global_tank;
+            let dc_out = raw_tank - this.dc_x + 0.995 * this.dc_y;
+            this.dc_x = raw_tank; this.dc_y = dc_out;
+            this.global_tank = isNaN(dc_out) ? 0 : dc_out;
 
             let cutoff_hz = this.scale(Math.max(0, Math.min(1, n_thicket + (ghost_mod*0.6))), 0.0, 1.0, 18000.0, 400.0);
             let alpha = Math.max(0.001, Math.min(1.0, (cutoff_hz / sr) * this.TWOPI));
             let filtered_wet = this.lpf_y * (1.0 - alpha) + this.global_tank * alpha;
-            this.lpf_y = filtered_wet;
+            this.lpf_y = isNaN(filtered_wet) ? 0 : filtered_wet;
 
             let amb_deg_alpha = Math.max(0.001, Math.min(1.0, (this.scale(n_rhizome, 0.0, 1.0, 18000.0, 1000.0) / 44100.0) * this.TWOPI));
 
@@ -343,7 +346,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             let pulse_high = 1.0 - pulse_low;
             let tided_wet = parallel_wet * (1.0 - n_tide) + ((tide_low * pulse_low) + (tide_high * pulse_high)) * n_tide;
 
-            let wet_rms = this.slide(Math.abs(tided_wet), 4410.0, 4410.0, this.wet_rms_prev || 0);
+            let wet_rms = this.slide(Math.abs(tided_wet), 4410.0, 4410.0, this.wet_rms_prev);
             this.wet_rms_prev = wet_rms;
             let distill_thresh = 0.5 - (n_distill * 0.48);
             let gain_reduction = Math.max(0.08, Math.min(1.0, distill_thresh / (wet_rms + 0.001)));
@@ -353,9 +356,15 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             let dry_level = Math.max(0, Math.min(1, (1.0 - n_veil) * 5.0));
             let wet_level = Math.pow(n_veil, 1.5);
 
-            this.out_spread.write(distilled_wet);
-            outL[i] = (in1 * dry_level) + (distilled_wet * wet_level);
-            outR[i] = (in1 * dry_level) + (this.out_spread.read(150) * wet_level);
+            this.out_spread.write(isNaN(distilled_wet) ? 0 : distilled_wet);
+            let wet_out = isNaN(distilled_wet) ? 0 : distilled_wet;
+            let spread_out = isNaN(this.out_spread.read(150)) ? 0 : this.out_spread.read(150);
+
+            let finalL = (in1 * dry_level) + (wet_out * wet_level);
+            let finalR = (in1 * dry_level) + (spread_out * wet_level);
+
+            outL[i] = isNaN(finalL) ? 0 : finalL;
+            outR[i] = isNaN(finalR) ? 0 : finalR;
         }
         return true;
     }
