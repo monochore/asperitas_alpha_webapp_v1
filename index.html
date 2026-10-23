@@ -176,12 +176,12 @@ class AsperitasProcessor extends AudioWorkletProcessor {
         this.amber_freeze = new SafeDelay(88200); this.amber2_freeze = new SafeDelay(176400);
 
         this.sm_transmute = 0; this.sm_sway = 0; this.sm_entropy = 0;
-        this.wander = 0; this.ph1 = 0; this.ph2 = 0;
+        this.ghost_phase = 0; this.ph1 = 0; this.ph2 = 0;
         this.ph_c1 = 0; this.ph_c2 = 0; this.ph_c3 = 0; this.ph_c4 = 0; this.ph_tide = 0;
         this.swell_env = 0; this.wet_rms_prev = 0;
         this.TWOPI = Math.PI * 2;
     }
-    slide(t, c, u, d, prev) { if(isNaN(c)) c=0; let diff=t-c; return (diff>0?c+diff/Math.max(1,u):c+diff/Math.max(1,d)); }
+    slide(t, c, u, d) { if(isNaN(c)) c=0; let diff=t-c; return (diff>0?c+diff/Math.max(1,u):c+diff/Math.max(1,d)); }
     noise() { return Math.random()*2-1; }
     wrap(v, min, max) { let r=max-min; if(r===0) return min; let res=(v-min)%r; if(res<0) res+=r; return res+min; }
     scale(v, inMin, inMax, outMin, outMax) { return outMin + (v - inMin) / (inMax - inMin) * (outMax - outMin); }
@@ -214,9 +214,10 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             this.sm_sway = this.slide(sway / 100.0, 22050.0, 22050.0, this.sm_sway);
             this.sm_entropy = this.slide(entropy / 100.0, 22050.0, 22050.0, this.sm_entropy);
 
-            this.wander = this.slide(this.noise(), 88200.0, 88200.0, this.wander);
-            let bipolar_ghost = (this.wander * 2.0) - 1.0;
-            let ghost_mod = bipolar_ghost * Math.pow(this.sm_entropy, 2.0) * 1.2;
+            // SMOOTH GHOST MODULATION (Eliminates white noise hiss)
+            this.ghost_phase = (this.ghost_phase + (0.2 + this.sm_entropy * 2.0) / sr) % 1.0;
+            let bipolar_ghost = Math.sin(this.ghost_phase * this.TWOPI);
+            let ghost_mod = bipolar_ghost * Math.pow(this.sm_entropy, 2.0) * 0.5;
 
             let n_alembic = Math.pow(alembic / 100.0, 2.0);
             let n_thicket = Math.pow(thicket / 100.0, 2.0);
@@ -255,7 +256,7 @@ class AsperitasProcessor extends AudioWorkletProcessor {
 
             let tank_input = weather_in * (1.0 - this.sm_transmute) + cascade_sig * this.sm_transmute;
 
-            let fb_base = this.scale(n_alembic, 0.0, 1.0, 0.70, 0.975);
+            let fb_base = this.scale(n_alembic, 0.0, 1.0, 0.0, 0.975); // 0% alembic = no feedback trap
             let fb_total = fb_base + (n_rhizome * 0.04);
             let drive = 1.0 + (n_rhizome * 9.0);
 
@@ -353,8 +354,9 @@ class AsperitasProcessor extends AudioWorkletProcessor {
             let compressed_wet = tided_wet * (1.0 * (1.0 - n_distill) + (gain_reduction * 3.0) * n_distill);
             let distilled_wet = Math.tanh(compressed_wet);
 
-            let dry_level = Math.max(0, Math.min(1, (1.0 - n_veil) * 5.0));
-            let wet_level = Math.pow(n_veil, 1.5);
+            // SMOOTH EQUAL-POWER DRY/WET CROSSFADE (Veil)
+            let dry_level = Math.cos(n_veil * Math.PI * 0.5);
+            let wet_level = Math.sin(n_veil * Math.PI * 0.5);
 
             this.out_spread.write(isNaN(distilled_wet) ? 0 : distilled_wet);
             let wet_out = isNaN(distilled_wet) ? 0 : distilled_wet;
