@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASPERITAS - Weathering Engine</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&display=swap');
+    :root {
+        --bg: #0c0c0c; --panel: #111111; --border-main: #ffffff; --col-div: rgba(255, 255, 255, 0.25);
+        --c-green: #00ff44; --c-amber: #ff9d00; --c-cyan: #00aaff; --c-red: #ff4444;
+        --text-dim: #bbbbbb;
+    }
+    body { background-color: var(--bg); color: #fff; font-family: 'Oswald', sans-serif; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; user-select: none; overflow: hidden; }
+    
+    #chassis { display: flex; flex-direction: row; background-color: var(--panel); border: 2px solid var(--border-main); outline: 2px solid var(--border-main); outline-offset: -8px; padding: 10px; box-shadow: inset 0 0 60px rgba(0,0,0,0.9), 0 20px 50px rgba(0,0,0,0.8); transform-origin: center center; }
+    .vertical-text { writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font-size: 14px; font-weight: 500; letter-spacing: 6px; padding: 0 15px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; }
+    .panel-core { display: flex; border-left: 1px solid var(--col-div); border-right: 1px solid var(--col-div); padding: 15px 0; }
+    
+    .column { width: 155px; display: flex; flex-direction: column; align-items: center; border-right: 1px solid var(--col-div); padding: 0 5px; position: relative; }
+    .column:last-child { border-right: none; }
+    .col-header { font-size: 14px; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; color: var(--text-dim); height: 20px; text-align: center; transition: color 0.3s ease, text-shadow 0.3s ease; }
+    
+    .oled-container { width: 140px; background: #000; border: 1px solid #333; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; padding: 5px; box-sizing: border-box; box-shadow: inset 0 0 10px rgba(255,255,255,0.05); }
+    #scope { width: 100%; height: 40px; background: #050505; margin-bottom: 6px; border: 1px solid #222; cursor: pointer; }
+    .oled-row { display: flex; width: 100%; justify-content: space-between; margin-bottom: 5px; gap: 2px; }
+    .oled-btn { flex: 1; background: transparent; border: 1px solid #555; color: #fff; font-family: 'Oswald', sans-serif; font-size: 9px; padding: 3px 0; cursor: pointer; text-transform: uppercase; transition: 0.1s; text-align: center; }
+    .oled-btn:hover { background: #333; }
+    .oled-btn.active { background: var(--border-main); color: #000; }
+    
+    /* AMBER STAGE BUTTONS */
+    .amber-btn { width: 100%; height: 36px; background: #111; border: 1px solid #555; color: var(--text-dim); font-family: 'Oswald', sans-serif; font-size: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: 0.15s; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
+    .amber-btn:hover { background: #222; border-color: var(--c-amber); }
+    .amber-btn.active { background: var(--c-amber); border-color: var(--c-amber); color: #000; font-weight: bold; box-shadow: 0 0 12px var(--c-amber); }
+
+    #ab-slider::-webkit-slider-thumb { appearance: none; width: 8px; height: 12px; background: #fff; cursor: pointer; }
+    #preset-list { width: 100%; background: #000; color: var(--border-main); border: 1px solid #555; font-family: 'Oswald', sans-serif; font-size: 10px; outline: none; padding: 2px; }
+    
+    .knob-group { display: flex; flex-direction: column; align-items: center; margin-bottom: 15px; width: 100%; }
+    .knob-row { display: flex; justify-content: space-evenly; width: 100%; margin-bottom: 15px; }
+    .knob-container { display: flex; flex-direction: column; align-items: center; position: relative; }
+    .knob-label { font-size: 10px; margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
+    .knob-svg { width: 40px; height: 40px; cursor: ns-resize; overflow: visible; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5)); }
+    .knob-bg { fill: #1c1c1c; stroke-width: 2.5px; }
+    .knob-indicator { stroke: #fff; stroke-width: 2.5px; stroke-linecap: round; }
+    
+    .col-src .knob-bg { stroke: var(--c-green); } .col-src .knob-label { color: var(--c-green); }
+    .col-wea .knob-bg { stroke: var(--c-amber); } .col-wea .knob-label { color: var(--c-amber); }
+    .col-dee .knob-bg { stroke: var(--c-cyan); }  .col-dee .knob-label { color: var(--c-cyan); }
+    .col-mac .knob-bg { stroke: var(--c-red); }   .col-mac .knob-label { color: var(--c-red); }
+</style>
+</head>
+<body>
+<div id="chassis">
+    <div class="vertical-text">ASPERITAS</div>
+    <div class="panel-core">
+        
+        <!-- COLUMN 1: I. SOURCE -->
+        <div class="column col-src" data-col="src">
+            <div class="col-header" id="hdr-src">I. SOURCE</div>
+            <div class="oled-container">
+                <canvas id="scope" title="Click to toggle Seismograph"></canvas>
+                <div class="oled-row">
+                    <button class="oled-btn" id="btn-activate">ACTIVATE</button>
+                    <button class="oled-btn" id="btn-scatter">SCATTER</button>
+                </div>
+                <div class="oled-row">
+                    <button class="oled-btn" id="btn-dump">DUMP</button>
+                    <button class="oled-btn" id="btn-rec">REC</button>
+                    <button class="oled-btn" id="btn-drift">DRIFT</button>
+                </div>
+                <div class="oled-row" style="margin-bottom: 5px;">
+                    <div style="display:flex; flex: 1; align-items:center; justify-content:center; background:#111; border:1px solid #333; padding:0 2px;">
+                        <button class="oled-btn" id="btn-a" style="border:none; padding:2px; min-width:15px; color:#aaa;">A</button>
+                        <input type="range" id="ab-slider" min="0" max="1" step="0.001" value="0" style="width: 50px; flex: none; margin: 0 10px; height: 2px; -webkit-appearance: none; background: #555; outline: none;">
+                        <button class="oled-btn" id="btn-b" style="border:none; padding:2px; min-width:15px; color:#aaa;">B</button>
+                    </div>
+                </div>
+                <select id="preset-list" style="margin-bottom: 5px;"><option value="init">INITIALIZED</option></select>
+                <div class="oled-row">
+                    <button class="oled-btn" id="btn-mic">MIC</button>
+                    <button class="oled-btn" id="btn-file">FILE</button>
+                    <input type="file" id="file-upload" accept="audio/*" style="display:none;">
+                </div>
+            </div>
+            
+            <div class="knob-group"><div class="knob-container"><div class="knob-label">SUBLIMATE</div><svg class="knob-svg" id="sublimate" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
+            
+            <!-- AMBER BUFFER BUTTONS -->
+            <button class="amber-btn" id="btn-amber1">AMBER I (2S)</button>
+            <button class="amber-btn" id="btn-amber2">AMBER II (4S)</button>
+
+            <div class="knob-row">
+                <div class="knob-container"><div class="knob-label" style="font-size:9px;">UNDERTOW</div><svg class="knob-svg" id="undertow" data-val="0" viewBox="0 0 44 44" style="width:36px;height:36px;"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+            </div>
+        </div>
+
+        <!-- COLUMN 2: II. WEATHERING -->
+        <div class="column col-wea" data-col="wea">
+            <div class="col-header" id="hdr-wea">II. WEATHERING</div>
+            <div class="knob-group" style="margin-top: 15px;"><div class="knob-container"><div class="knob-label">PATINA</div><svg class="knob-svg" id="rhizome" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
+            <div class="knob-row" style="margin-top: 25px;">
+                <div class="knob-container"><div class="knob-label">THICKET</div><svg class="knob-svg" id="thicket" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+                <div class="knob-container"><div class="knob-label">TIDE</div><svg class="knob-svg" id="tide" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+            </div>
+        </div>
+
+        <!-- COLUMN 3: III. THE DEEP -->
+        <div class="column col-dee" data-col="dee">
+            <div class="col-header" id="hdr-dee">III. THE DEEP</div>
+            <div class="knob-group" style="margin-top: 15px;"><div class="knob-container"><div class="knob-label">ALEMBIC</div><svg class="knob-svg" id="alembic" data-val="0.5" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
+            <div class="knob-row" style="margin-top: 10px;">
+                <div class="knob-container"><div class="knob-label">TRANSMUTE</div><svg class="knob-svg" id="transmute" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+                <div class="knob-container"><div class="knob-label">SWAY</div><svg class="knob-svg" id="sway" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+            </div>
+            <div class="knob-group" style="margin-top: 10px;"><div class="knob-container"><div class="knob-label">DISTILL</div><svg class="knob-svg" id="distill" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
+        </div>
+
+        <!-- COLUMN 4: IV. MACROS -->
+        <div class="column col-mac" data-col="mac">
+            <div class="col-header" id="hdr-mac">IV. MACROS</div>
+            <div class="knob-group" style="margin-top: 15px;"><div class="knob-container"><div class="knob-label">OUROBOROS</div><svg class="knob-svg" id="ouroboros" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
+            <div class="knob-row" style="margin-top: 25px;">
+                <div class="knob-container"><div class="knob-label">ENTROPY</div><svg class="knob-svg" id="entropy" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+                <div class="knob-container"><div class="knob-label">VEIL</div><svg class="knob-svg" id="veil" data-val="0.5" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+            </div>
+        </div>
+    </div>
+    <div class="vertical-text">WEATHERING ENGINE</div>
+</div>
+
+<script>
+function fitToScreen() {
+    const chassis = document.getElementById('chassis');
+    chassis.style.transform = 'none'; 
+    const rect = chassis.getBoundingClientRect();
+    const padding = 20; 
+    const scaleX = window.innerWidth / (rect.width + padding);
+    const scaleY = window.innerHeight / (rect.height + padding);
+    const scale = Math.min(1, scaleX, scaleY); 
+    chassis.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fitToScreen);
+setTimeout(fitToScreen, 50);
+
+const workletString = `
+class SafeDelay {
+    constructor(size) { this.size = size; this.buf = new Float32Array(size); this.writeIdx = 0; }
+    write(val) { if(isNaN(val)) val = 0; this.buf[this.writeIdx] = val; this.writeIdx = (this.writeIdx + 1) % this.size; }
+    read(sAgo, interp = "spline") {
+        if(isNaN(sAgo)) sAgo = 0; sAgo = Math.max(0, Math.min(sAgo, this.size - 2)); 
+        let rPos = this.writeIdx - sAgo; while(rPos < 0) rPos += this.size;
+        let i1 = Math.floor(rPos); let i2 = (i1 + 1) % this.size; let frac = rPos - i1;
+        return this.buf[i1] + frac * (this.buf[i2] - this.buf[i1]);
+    }
+}
+
+class AsperitasProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.p = { sublimate: 0, alembic: 50, thicket: 0, veil: 50, rhizome: 0, tide: 0, sway: 0, amber: 0, amber2: 0, transmute: 0, distill: 0, ouroboros: 0, entropy: 0, undertow: 0 };
+        this.port.onmessage = e => { if (e.data.id && this.p[e.data.id] !== undefined) this.p[e.data.id] = e.data.value; };
+        
+        this.c1_fb = 0; this.c2_fb = 0; this.c3_fb = 0; this.c4_fb = 0;
+        this.lpf_y = 0; this.tide_lpf = 0;
+        this.rhz_lpf1 = 0; this.rhz_lpf2 = 0; this.rhz_lpf3 = 0; this.rhz_lpf4 = 0;
+        this.amb_lpf1 = 0; this.amb_lpf2 = 0;
+        this.global_tank = 0; this.ouro_hp_y = 0; this.ouro_lp_y = 0; 
+        
+        this.cascade = new SafeDelay(88200);
+        this.c1_delay = new SafeDelay(44100); this.c2_delay = new SafeDelay(44100);
+        this.c3_delay = new SafeDelay(44100); this.c4_delay = new SafeDelay(44100);
+        this.out_spread = new SafeDelay(4410);
+        this.amber_freeze = new SafeDelay(88200); this.amber2_freeze = new SafeDelay(176400);
+
+        this.sm_transmute = 0; this.sm_sway = 0; this.sm_entropy = 0;
+        this.wander = 0; this.ph1 = 0; this.ph2 = 0;
+        this.ph_c1 = 0; this.ph_c2 = 0; this.ph_c3 = 0; this.ph_c4 = 0; this.ph_tide = 0;
+        this.swell_env = 0;
+        this.TWOPI = Math.PI * 2;
+    }
+    slide(t, c, u, d) { if(isNaN(c)) c=0; let diff=t-c; return c+(diff>0?diff/Math.max(1,u):diff/Math.max(1,d)); }
+    noise() { return Math.random()*2-1; }
+    wrap(v, min, max) { let r=max-min; if(r===0) return min; let res=(v-min)%r; if(res<0) res+=r; return res+min; }
+    scale(v, inMin, inMax, outMin, outMax) { return outMin + (v - inMin) / (inMax - inMin) * (outMax - outMin); }
+    clip(v, min, max) { return Math.max(min, Math.max(max, v) === max ? Math.min(max, v) : Math.max(min, v)); } // standard clamp
+
+    process(ins, outs) {
+        const input = ins[0][0]; const outL = outs[0][0]; const outR = outs[0][1];
+        if (!outL || !outR) return true;
+        const sr = sampleRate;
+
+        for (let i = 0; i < outL.length; i++) {
+            let in1 = input ? input[i] : 0;
+
+            let sublimate = this.p.sublimate;
+            let alembic = this.p.alembic;
+            let thicket = this.p.thicket;
+            let veil = this.p.veil;
+            let rhizome = this.p.rhizome;
+            let tide = this.p.tide;
+            let sway = this.p.sway;
+            let amber = this.p.amber;
+            let amber2 = this.p.amber2;
+            let transmute = this.p.transmute;
+            let distill = this.p.distill;
+            let ouroboros = this.p.ouroboros;
+            let entropy = this.p.entropy;
+            let undertow = this.p.undertow;
+
+            this.sm_transmute = this.slide(transmute / 100.0, 22050.0, 22050.0);
+            this.sm_sway = this.slide(sway / 100.0, 22050.0, 22050.0);
+            this.sm_entropy = this.slide(entropy / 100.0, 22050.0, 22050.0);
+
+            this.wander = this.slide(this.noise(), 88200.0, 88200.0);
+            let bipolar_ghost = (this.wander * 2.0) - 1.0;
+            let ghost_mod = bipolar_ghost * Math.pow(this.sm_entropy, 2.0) * 1.2;
+
+            let n_alembic = Math.pow(alembic / 100.0, 2.0);
+            let n_thicket = Math.pow(thicket / 100.0, 2.0);
+            let n_rhizome = Math.pow(rhizome / 100.0, 2.0);
+            let n_distill = distill / 100.0;
+            let n_veil = veil / 100.0;
+            let n_sublimate = Math.pow(sublimate / 100.0, 2.0);
+            let n_tide = tide / 100.0;
+            let n_ouro = Math.pow(ouroboros / 100.0, 2.0);
+            let n_undertow = undertow / 100.0;
+
+            let sm_amber = amber / 100.0;
+            let sm_amber2 = amber2 / 100.0;
+
+            let play_gate = Math.abs(in1) > 0.005 ? 1 : 0;
+            let swell_attack = 1.0 + (n_sublimate * 52920.0);
+            this.swell_env = this.slide(play_gate, swell_attack, 4410.0, this.swell_env);
+            let swelled_in = in1 * (1.0 - n_sublimate) + (in1 * this.swell_env * (1.0 + (n_sublimate * 2.0))) * n_sublimate;
+
+            let ouro_hp_alpha = Math.max(0.001, Math.min(1.0, (250.0 / sr) * this.TWOPI));
+            this.ouro_hp_y = this.ouro_hp_y * (1.0 - ouro_hp_alpha) + this.global_tank * ouro_hp_alpha;
+            let ouro_clean = this.global_tank - this.ouro_hp_y;
+            let ouro_lp_alpha = Math.max(0.001, Math.min(1.0, (3000.0 / sr) * this.TWOPI));
+            this.ouro_lp_y = this.ouro_lp_y * (1.0 - ouro_lp_alpha) + ouro_clean * ouro_lp_alpha;
+            let weather_in = swelled_in + Math.tanh(this.ouro_lp_y * n_ouro * 0.40);
+
+            let t1_samp = this.scale(Math.max(0, Math.min(1, this.sm_transmute + ghost_mod)), 0.0, 1.0, 8820.0, 30870.0);
+            let t2_samp = this.scale(Math.max(0, Math.min(1, this.sm_transmute - (ghost_mod*0.5))), 0.0, 1.0, 17640.0, 52920.0);
+            let t3_samp = this.scale(Math.max(0, Math.min(1, this.sm_transmute + (ghost_mod*0.2))), 0.0, 1.0, 26460.0, 80000.0);
+
+            this.cascade.write(weather_in);
+            let tap1 = this.cascade.read(t1_samp, "spline");
+            let tap2 = this.cascade.read(t2_samp, "spline");
+            let tap3 = this.cascade.read(t3_samp, "spline");
+            let cascade_sig = (tap1 + tap2 + tap3) * 0.5;
+
+            let tank_input = weather_in * (1.0 - this.sm_transmute) + cascade_sig * this.sm_transmute;
+
+            let fb_base = this.scale(n_alembic, 0.0, 1.0, 0.70, 0.975);
+            let fb_total = fb_base + (n_rhizome * 0.04);
+            let drive = 1.0 + (n_rhizome * 9.0);
+
+            let mod_depth = (this.sm_sway * 960.0) + (Math.abs(ghost_mod) * 480.0);
+
+            this.ph_c1 = (this.ph_c1 + 0.1 / sr) % 1.0; let cyc1 = Math.sin(this.ph_c1 * this.TWOPI);
+            this.ph_c2 = (this.ph_c2 + 0.13 / sr) % 1.0; let cyc2 = Math.sin(this.ph_c2 * this.TWOPI);
+            this.ph_c3 = (this.ph_c3 + 0.09 / sr) % 1.0; let cyc3 = Math.sin(this.ph_c3 * this.TWOPI);
+            this.ph_c4 = (this.ph_c4 + 0.11 / sr) % 1.0; let cyc4 = Math.sin(this.ph_c4 * this.TWOPI);
+
+            let c1 = this.c1_delay.read(2205 + cyc1 * mod_depth);
+            let c2 = this.c2_delay.read(2750 + cyc2 * mod_depth);
+            let c3 = this.c3_delay.read(3120 + cyc3 * mod_depth);
+            let c4 = this.c4_delay.read(3500 + cyc4 * mod_depth);
+
+            let rhz_cutoff = this.scale(n_rhizome, 0.0, 1.0, 18000.0, 4000.0);
+            let rhz_alpha = Math.max(0.001, Math.min(1.0, (rhz_cutoff / sr) * this.TWOPI));
+
+            this.rhz_lpf1 = this.rhz_lpf1 * (1.0 - rhz_alpha) + c1 * rhz_alpha;
+            this.rhz_lpf2 = this.rhz_lpf2 * (1.0 - rhz_alpha) + c2 * rhz_alpha;
+            this.rhz_lpf3 = this.rhz_lpf3 * (1.0 - rhz_alpha) + c3 * rhz_alpha;
+            this.rhz_lpf4 = this.rhz_lpf4 * (1.0 - rhz_alpha) + c4 * rhz_alpha;
+
+            this.c1_fb = Math.tanh(this.rhz_lpf1 * fb_total * drive) / drive;
+            this.c2_fb = Math.tanh(this.rhz_lpf2 * fb_total * drive) / drive;
+            this.c3_fb = Math.tanh(this.rhz_lpf3 * fb_total * drive) / drive;
+            this.c4_fb = Math.tanh(this.rhz_lpf4 * fb_total * drive) / drive;
+
+            this.c1_delay.write(tank_input + this.c1_fb);
+            this.c2_delay.write(tank_input + this.c2_fb);
+            this.c3_delay.write(tank_input + this.c3_fb);
+            this.c4_delay.write(tank_input + this.c4_fb);
+
+            let raw_tank = (c1 + c2 + c3 + c4) * 0.25;
+            this.global_tank = raw_tank - this.global_tank + 0.995 * this.global_tank; // dcblock approx
+
+            let cutoff_hz = this.scale(Math.max(0, Math.min(1, n_thicket + (ghost_mod*0.6))), 0.0, 1.0, 18000.0, 400.0);
+            let alpha = Math.max(0.001, Math.min(1.0, (cutoff_hz / sr) * this.TWOPI));
+            let filtered_wet = this.lpf_y * (1.0 - alpha) + this.global_tank * alpha;
+            this.lpf_y = filtered_wet;
+
+            let amb_deg_alpha = Math.max(0.001, Math.min(1.0, (this.scale(n_rhizome, 0.0, 1.0, 18000.0, 1000.0) / 44100.0) * this.TWOPI));
+
+            let freeze_sig = this.amber_freeze.read(88200);
+            this.amb_lpf1 = this.amb_lpf1 * (1.0 - amb_deg_alpha) + freeze_sig * amb_deg_alpha;
+            let freeze_in = filtered_wet * (1.0 - sm_amber) + this.amb_lpf1 * sm_amber;
+            this.amber_freeze.write(freeze_in);
+
+            this.ph1 = (this.ph1 + 0.5 / sr) % 1.0;
+            let rev_ph1 = this.wrap(1.0 - this.ph1, 0.0, 1.0);
+            let rev_ph2 = this.wrap(rev_ph1 + 0.5, 0.0, 1.0);
+            let rev_w1 = 0.5 * (1.0 - Math.cos(rev_ph1 * this.TWOPI));
+            let rev_w2 = 0.5 * (1.0 - Math.cos(rev_ph2 * this.TWOPI));
+            let rev1_sig = (this.amber_freeze.read(rev_ph1 * 88200.0, "linear") * rev_w1) + 
+                           (this.amber_freeze.read(rev_ph2 * 88200.0, "linear") * rev_w2);
+
+            let freeze2_sig = this.amber2_freeze.read(176400);
+            this.amb_lpf2 = this.amb_lpf2 * (1.0 - amb_deg_alpha) + freeze2_sig * amb_deg_alpha;
+            let freeze2_in = filtered_wet * (1.0 - sm_amber2) + this.amb_lpf2 * sm_amber2;
+            this.amber2_freeze.write(freeze2_in);
+
+            this.ph2 = (this.ph2 + 0.25 / sr) % 1.0;
+            let rev_ph3 = this.wrap(1.0 - this.ph2, 0.0, 1.0);
+            let rev_ph4 = this.wrap(rev_ph3 + 0.5, 0.0, 1.0);
+            let rev_w3 = 0.5 * (1.0 - Math.cos(rev_ph3 * this.TWOPI));
+            let rev_w4 = 0.5 * (1.0 - Math.cos(rev_ph4 * this.TWOPI));
+            let rev2_sig = (this.amber2_freeze.read(rev_ph3 * 176400.0, "linear") * rev_w3) + 
+                           (this.amber2_freeze.read(rev_ph4 * 176400.0, "linear") * rev_w4);
+
+            let fwd_amt = Math.cos(n_undertow * Math.PI * 0.5);
+            let rev_amt = Math.sin(n_undertow * Math.PI * 0.5);
+
+            let amb1_final = (this.amb_lpf1 * fwd_amt) + (rev1_sig * rev_amt);
+            let amb2_final = (this.amb_lpf2 * fwd_amt) + (rev2_sig * rev_amt);
+
+            let parallel_wet = Math.tanh(filtered_wet + (amb1_final * sm_amber) + (amb2_final * sm_amber2));
+
+            let tide_alpha = Math.max(0.001, Math.min(1.0, (400.0 / sr) * this.TWOPI));
+            this.tide_lpf = this.tide_lpf * (1.0 - tide_alpha) + parallel_wet * tide_alpha;
+            let tide_low = this.tide_lpf;
+            let tide_high = parallel_wet - tide_low;
+
+            this.ph_tide = (this.ph_tide + (0.05 + (n_tide * 0.18)) / sr) % 1.0;
+            let tide_lfo = Math.sin(this.ph_tide * this.TWOPI);
+            let pulse_low = (tide_lfo * 0.5) + 0.5;
+            let pulse_high = 1.0 - pulse_low;
+            let tided_wet = parallel_wet * (1.0 - n_tide) + ((tide_low * pulse_low) + (tide_high * pulse_high)) * n_tide;
+
+            let wet_rms = this.slide(Math.abs(tided_wet), 4410.0, 4410.0, this.wet_rms_prev || 0);
+            this.wet_rms_prev = wet_rms;
+            let distill_thresh = 0.5 - (n_distill * 0.48);
+            let gain_reduction = Math.max(0.08, Math.min(1.0, distill_thresh / (wet_rms + 0.001)));
+            let compressed_wet = tided_wet * (1.0 * (1.0 - n_distill) + (gain_reduction * 3.0) * n_distill);
+            let distilled_wet = Math.tanh(compressed_wet);
+
+            let dry_level = Math.max(0, Math.min(1, (1.0 - n_veil) * 5.0));
+            let wet_level = Math.pow(n_veil, 1.5);
+
+            this.out_spread.write(distilled_wet);
+            outL[i] = (in1 * dry_level) + (distilled_wet * wet_level);
+            outR[i] = (in1 * dry_level) + (this.out_spread.read(150) * wet_level);
+        }
+        return true;
+    }
+}
+registerProcessor('asperitas-node', AsperitasProcessor);
+`;
+
+let audioCtx, asperitasNode, analyzer, scopeData, recNode; let isPlaying = false; 
+let presets = JSON.parse(localStorage.getItem('asperitas_presets_v1')) || {};
+const canvas = document.getElementById('scope'); const ctx = canvas.getContext('2d'); canvas.width = 140; canvas.height = 40;
+
+let scopeMode = 0; let seismoHistory = new Array(canvas.width).fill(0);
+canvas.addEventListener('click', () => { scopeMode = 1 - scopeMode; });
+
+function drawScope() {
+    requestAnimationFrame(drawScope); ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!analyzer || !isPlaying) return;
+    analyzer.getByteTimeDomainData(scopeData); 
+    if (scopeMode === 0) {
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#00ff44'; ctx.beginPath();
+        let sliceWidth = canvas.width * 1.0 / scopeData.length; let x = 0;
+        for(let i = 0; i < scopeData.length; i++) { let v = scopeData[i] / 128.0; let y = v * canvas.height / 2; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); x += sliceWidth; }
+        ctx.lineTo(canvas.width, canvas.height/2); ctx.stroke();
+    } else {
+        let peak = 0; for(let i=0; i<scopeData.length; i++) { let v = Math.abs(scopeData[i] - 128) / 128.0; if(v > peak) peak = v; }
+        seismoHistory.shift(); seismoHistory.push(peak); ctx.fillStyle = '#ff4444';
+        for(let x=0; x<canvas.width; x++) { let h = seismoHistory[x] * canvas.height; ctx.fillRect(x, canvas.height - h, 1, h); }
+    }
+}
+drawScope();
+
+function setKnobValue(knob, val) { val = Math.max(0, Math.min(1, val)); knob.dataset.val = val; let angle = -135 + (val * 270); knob.querySelector('.knob-indicator').setAttribute('transform', `rotate(${angle}, 22, 22)`); sendParam(knob.id, val); updateColumnGlow(knob); }
+function sendParam(id, val) { if (asperitasNode) asperitasNode.port.postMessage({ id: id, value: val }); }
+function syncAllParams() { document.querySelectorAll('.knob-svg').forEach(knob => { sendParam(knob.id, parseFloat(knob.dataset.val)); updateColumnGlow(knob); }); }
+
+// HOT BULB GLOW LOGIC
+function updateColumnGlow(knob) {
+    const col = knob.closest('.column');
+    if (!col) return;
+    const colId = col.dataset.col;
+    const header = col.querySelector('.col-header');
+    if (!header) return;
+    
+    const knobsInCol = col.querySelectorAll('.knob-svg');
+    let sum = 0;
+    knobsInCol.forEach(k => sum += parseFloat(k.dataset.val));
+    let avg = knobsInCol.length > 0 ? sum / knobsInCol.length : 0;
+    
+    let rgb = '187, 187, 187';
+    if (colId === 'src') { rgb = '0, 255, 68'; }
+    else if (colId === 'wea') { rgb = '255, 157, 0'; }
+    else if (colId === 'dee') { rgb = '0, 170, 255'; }
+    else if (colId === 'mac') { rgb = '255, 68, 68'; }
+    
+    if (avg < 0.05) {
+        header.style.color = 'var(--text-dim)';
+        header.style.textShadow = 'none';
+    } else {
+        header.style.color = `rgba(${rgb}, ${0.5 + avg * 0.5})`;
+        header.style.textShadow = `0 0 ${avg * 8}px rgba(${rgb}, ${avg * 0.8}), 0 0 ${avg * 16}px rgba(${rgb}, ${avg * 0.4})`;
+    }
+}
+
+let isRecording = false; let recBuffersL = []; let recBuffersR = []; let recLength = 0;
+let micStream = null, fileSource = null; let extGain = null;
+
+async function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    const blob = new Blob([workletString], { type: 'application/javascript' });
+    await audioCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+    asperitasNode = new AudioWorkletNode(audioCtx, 'asperitas-node', { outputChannelCount: [2] });
+    
+    extGain = audioCtx.createGain(); extGain.connect(asperitasNode);
+    analyzer = audioCtx.createAnalyser(); analyzer.fftSize = 512; scopeData = new Uint8Array(analyzer.frequencyBinCount);
+    
+    recNode = audioCtx.createScriptProcessor(4096, 2, 2);
+    recNode.onaudioprocess = function(e) {
+        if (!isRecording) return;
+        recBuffersL.push(new Float32Array(e.inputBuffer.getChannelData(0))); recBuffersR.push(new Float32Array(e.inputBuffer.getChannelData(1))); recLength += e.inputBuffer.getChannelData(0).length;
+    };
+
+    asperitasNode.connect(analyzer); analyzer.connect(audioCtx.destination);
+    asperitasNode.connect(recNode); recNode.connect(audioCtx.destination);
+    
+    isPlaying = true; document.getElementById('btn-activate').classList.add('active'); syncAllParams();
+}
+
+document.querySelectorAll('.knob-svg').forEach(knob => {
+    let isDragging = false, startY, startVal; setKnobValue(knob, parseFloat(knob.dataset.val));
+    knob.addEventListener('mousedown', e => { isDragging = true; startY = e.clientY; startVal = parseFloat(knob.dataset.val); });
+    window.addEventListener('mousemove', e => { if(!isDragging) return; let delta = (startY - e.clientY) * 0.005; setKnobValue(knob, startVal + delta); });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+});
+
+document.getElementById('btn-activate').addEventListener('click', (e) => {
+    if (!audioCtx) { initAudio(); } else if (audioCtx.state === 'running') { audioCtx.suspend(); isPlaying = false; e.target.classList.remove('active'); } else { audioCtx.resume(); isPlaying = true; e.target.classList.add('active'); }
+});
+document.getElementById('btn-scatter').addEventListener('click', () => { document.querySelectorAll('.knob-svg').forEach(knob => { setKnobValue(knob, Math.random()); }); });
+
+let isDrifting = false;
+document.getElementById('btn-drift').addEventListener('click', (e) => { isDrifting = !isDrifting; e.target.classList.toggle('active', isDrifting); });
+setInterval(() => { if(!isDrifting || !isPlaying) return; document.querySelectorAll('.knob-svg').forEach(knob => { let v = parseFloat(knob.dataset.val) + (Math.random() - 0.5) * 0.002; setKnobValue(knob, v); }); }, 50);
+
+let stateA = null, stateB = null;
+document.getElementById('btn-a').addEventListener('click', (e) => { stateA = {}; document.querySelectorAll('.knob-svg').forEach(k => stateA[k.id] = parseFloat(k.dataset.val)); e.target.style.color = '#fff'; document.getElementById('btn-b').style.color = '#aaa'; document.getElementById('ab-slider').value = 0; });
+document.getElementById('btn-b').addEventListener('click', (e) => { stateB = {}; document.querySelectorAll('.knob-svg').forEach(k => stateB[k.id] = parseFloat(k.dataset.val)); e.target.style.color = '#fff'; document.getElementById('btn-a').style.color = '#aaa'; document.getElementById('ab-slider').value = 1; });
+document.getElementById('ab-slider').addEventListener('input', (e) => { if(!stateA || !stateB) return; let mix = parseFloat(e.target.value); document.querySelectorAll('.knob-svg').forEach(k => { setKnobValue(k, stateA[k.id] * (1 - mix) + stateB[k.id] * mix); }); });
+
+// AMBER BUTTON LATCHING
+let amber1State = false, amber2State = false;
+document.getElementById('btn-amber1').addEventListener('click', (e) => {
+    amber1State = !amber1State;
+    e.target.classList.toggle('active', amber1State);
+    sendParam('amber', amber1State ? 100 : 0);
+});
+document.getElementById('btn-amber2').addEventListener('click', (e) => {
+    amber2State = !amber2State;
+    e.target.classList.toggle('active', amber2State);
+    sendParam('amber2', amber2State ? 100 : 0);
+});
+
+document.getElementById('btn-mic').addEventListener('click', async (e) => {
+    if(!audioCtx) await initAudio();
+    if(micStream) return;
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = audioCtx.createMediaStreamSource(stream);
+        if(fileSource) { fileSource.disconnect(); fileSource = null; document.getElementById('btn-file').classList.remove('active'); }
+        micStream.connect(extGain);
+        e.target.classList.add('active');
+    } catch(err) { alert('Microphone access denied or unavailable.'); }
+});
+
+document.getElementById('btn-file').addEventListener('click', () => { document.getElementById('file-upload').click(); });
+document.getElementById('file-upload').addEventListener('change', async (e) => {
+    if(!audioCtx) await initAudio();
+    let file = e.target.files[0]; if(!file) return;
+    let reader = new FileReader();
+    reader.onload = async function(ev) {
+        let audioData = await audioCtx.decodeAudioData(ev.target.result);
+        if(micStream) { micStream.disconnect(); micStream = null; document.getElementById('btn-mic').classList.remove('active'); }
+        if(fileSource) { fileSource.disconnect(); }
+        fileSource = audioCtx.createBufferSource();
+        fileSource.buffer = audioData; fileSource.loop = true;
+        fileSource.connect(extGain); fileSource.start(0);
+        document.getElementById('btn-file').classList.add('active');
+    };
+    reader.readAsArrayBuffer(file);
+});
+
+document.getElementById('btn-rec').addEventListener('click', (e) => {
+    if(!audioCtx) return;
+    if (!isRecording) { isRecording = true; recBuffersL = []; recBuffersR = []; recLength = 0; e.target.style.background = 'var(--c-red)'; e.target.style.color = '#000'; } 
+    else { isRecording = false; e.target.style.background = 'transparent'; e.target.style.color = '#fff'; exportWAV(); }
+});
+function exportWAV() {
+    let interleaved = new Float32Array(recLength * 2); let offset = 0;
+    for (let i = 0; i < recBuffersL.length; i++) { let bufL = recBuffersL[i]; let bufR = recBuffersR[i]; for (let j = 0; j < bufL.length; j++) { interleaved[offset++] = bufL[j]; interleaved[offset++] = bufR[j]; } }
+    let buffer = new ArrayBuffer(44 + interleaved.length * 2); let view = new DataView(buffer);
+    let writeString = function(view, offset, string) { for (let i=0; i<string.length; i++) view.setUint8(offset + i, string.charCodeAt(i)); };
+    writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + interleaved.length * 2, true); writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 2, true);
+    view.setUint32(24, audioCtx.sampleRate, true); view.setUint32(28, audioCtx.sampleRate * 4, true); view.setUint16(32, 4, true); view.setUint16(34, 16, true);
+    writeString(view, 36, 'data'); view.setUint32(40, interleaved.length * 2, true);
+    let o = 44; for (let i = 0; i < interleaved.length; i++, o += 2) { let s = Math.max(-1, Math.min(1, interleaved[i])); view.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+    let blob = new Blob([view], { type: 'audio/wav' }); let url = URL.createObjectURL(blob); let a = document.createElement('a'); a.style.display = 'none'; a.href = url;
+    let pName = document.getElementById('preset-list').value; a.download = `ASPERITAS_${pName === 'init' ? 'RAW' : pName.replace(' ', '_')}.wav`;
+    document.body.appendChild(a); a.click(); URL.revokeObjectURL(url);
+}
+
+const words1 = ["FOG", "RUST", "TIDE", "ASH", "SALT", "STORM", "MOSS", "DUSK"];
+const words2 = ["DRIFT", "FROST", "WELL", "FOG", "HAZE", "VEIL", "DECAY", "MIST"];
+function refreshPresetList() {
+    const list = document.getElementById('preset-list'); list.innerHTML = '<option value="init">INITIALIZED</option>';
+    for(let pName in presets) { let opt = document.createElement('option'); opt.value = pName; opt.textContent = pName; list.appendChild(opt); }
+}
+refreshPresetList();
+document.getElementById('btn-dump').addEventListener('click', () => {
+    let name = words1[Math.floor(Math.random() * words1.length)] + " " + words2[Math.floor(Math.random() * words2.length)];
+    let state = {}; document.querySelectorAll('.knob-svg').forEach(k => { state[k.id] = parseFloat(k.dataset.val); });
+    presets[name] = state; localStorage.setItem('asperitas_presets_v1', JSON.stringify(presets)); refreshPresetList(); document.getElementById('preset-list').value = name;
+});
+document.getElementById('preset-list').addEventListener('change', (e) => {
+    if(e.target.value === 'init') return; let state = presets[e.target.value];
+    if(state) { for(let key in state) { let el = document.getElementById(key); if(el && el.classList.contains('knob-svg')) setKnobValue(el, state[key]); } }
+});
+</script>
+</body>
+</html>
