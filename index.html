@@ -21,23 +21,35 @@
     .column:last-child { border-right: none; }
     .col-header { font-size: 14px; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; color: var(--text-dim); height: 20px; text-align: center; transition: color 0.3s ease, text-shadow 0.3s ease; }
     
-    .oled-container { width: 140px; background: #000; border: 1px solid #333; margin-bottom: 15px; display: flex; flex-direction: column; align-items: center; padding: 5px; box-sizing: border-box; box-shadow: inset 0 0 10px rgba(255,255,255,0.05); }
+    .oled-container { width: 140px; background: #000; border: 1px solid #333; margin-bottom: 12px; display: flex; flex-direction: column; align-items: center; padding: 5px; box-sizing: border-box; box-shadow: inset 0 0 10px rgba(255,255,255,0.05); }
     #scope { width: 100%; height: 40px; background: #050505; margin-bottom: 6px; border: 1px solid #222; cursor: pointer; }
     .oled-row { display: flex; width: 100%; justify-content: space-between; margin-bottom: 5px; gap: 2px; }
     .oled-btn { flex: 1; background: transparent; border: 1px solid #555; color: #fff; font-family: 'Oswald', sans-serif; font-size: 9px; padding: 3px 0; cursor: pointer; text-transform: uppercase; transition: 0.1s; text-align: center; }
     .oled-btn:hover { background: #333; }
     .oled-btn.active { background: var(--border-main); color: #000; }
     
-    /* AMBER STAGE BUTTONS */
-    .amber-btn { width: 100%; height: 36px; background: #111; border: 1px solid #555; color: var(--text-dim); font-family: 'Oswald', sans-serif; font-size: 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: 0.15s; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; }
+    /* SIDE-BY-SIDE AMBER STAGE BUTTONS WITH INDEPENDENT PULSING */
+    .amber-container { display: flex; width: 140px; gap: 6px; margin-top: 5px; }
+    .amber-btn { flex: 1; height: 34px; background: #111; border: 1px solid #555; color: var(--text-dim); font-family: 'Oswald', sans-serif; font-size: 9px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.15s; display: flex; align-items: center; justify-content: center; text-align: center; }
     .amber-btn:hover { background: #222; border-color: var(--c-amber); }
-    .amber-btn.active { background: var(--c-amber); border-color: var(--c-amber); color: #000; font-weight: bold; box-shadow: 0 0 12px var(--c-amber); }
+    
+    .amber-btn.active#btn-amber1 { background: var(--c-amber); border-color: var(--c-amber); color: #000; font-weight: bold; animation: amberPulse1 2s ease-in-out infinite; }
+    .amber-btn.active#btn-amber2 { background: var(--c-amber); border-color: var(--c-amber); color: #000; font-weight: bold; animation: amberPulse2 4s ease-in-out infinite; }
+
+    @keyframes amberPulse1 {
+        0%, 100% { box-shadow: 0 0 4px var(--c-amber); opacity: 0.85; }
+        50% { box-shadow: 0 0 14px var(--c-amber); opacity: 1; }
+    }
+    @keyframes amberPulse2 {
+        0%, 100% { box-shadow: 0 0 4px var(--c-amber); opacity: 0.85; }
+        50% { box-shadow: 0 0 16px var(--c-amber); opacity: 0.9; }
+    }
 
     #ab-slider::-webkit-slider-thumb { appearance: none; width: 8px; height: 12px; background: #fff; cursor: pointer; }
     #preset-list { width: 100%; background: #000; color: var(--border-main); border: 1px solid #555; font-family: 'Oswald', sans-serif; font-size: 10px; outline: none; padding: 2px; }
     
-    .knob-group { display: flex; flex-direction: column; align-items: center; margin-bottom: 15px; width: 100%; }
-    .knob-row { display: flex; justify-content: space-evenly; width: 100%; margin-bottom: 15px; }
+    .knob-group { display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; width: 100%; }
+    .knob-row { display: flex; justify-content: space-evenly; width: 100%; margin-bottom: 10px; }
     .knob-container { display: flex; flex-direction: column; align-items: center; position: relative; }
     .knob-label { font-size: 10px; margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
     .knob-svg { width: 40px; height: 40px; cursor: ns-resize; overflow: visible; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5)); }
@@ -90,13 +102,12 @@
             </div>
             
             <div class="knob-group"><div class="knob-container"><div class="knob-label">SUBLIMATE</div><svg class="knob-svg" id="sublimate" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
-            
-            <!-- AMBER BUFFER BUTTONS -->
-            <button class="amber-btn" id="btn-amber1">AMBER I (2S)</button>
-            <button class="amber-btn" id="btn-amber2">AMBER II (4S)</button>
+            <div class="knob-group"><div class="knob-container"><div class="knob-label">UNDERTOW</div><svg class="knob-svg" id="undertow" data-val="0" viewBox="0 0 44 44"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div></div>
 
-            <div class="knob-row">
-                <div class="knob-container"><div class="knob-label" style="font-size:9px;">UNDERTOW</div><svg class="knob-svg" id="undertow" data-val="0" viewBox="0 0 44 44" style="width:36px;height:36px;"><circle class="knob-bg" cx="22" cy="22" r="18"></circle><line class="knob-indicator" x1="22" y1="22" x2="22" y2="8"></line></svg></div>
+            <!-- SIDE-BY-SIDE AMBER STAGE BUTTONS -->
+            <div class="amber-container">
+                <button class="amber-btn" id="btn-amber1">AMBER I (2S)</button>
+                <button class="amber-btn" id="btn-amber2">AMBER II (4S)</button>
             </div>
         </div>
 
@@ -523,7 +534,7 @@ document.getElementById('btn-mic').addEventListener('click', async (e) => {
         if(fileSource) { fileSource.disconnect(); fileSource = null; document.getElementById('btn-file').classList.remove('active'); }
         micStream.connect(extGain);
         e.target.classList.add('active');
-        loadAudioDevices(); // Refresh labels now that permission is granted
+        loadAudioDevices();
     } catch(err) { alert('Microphone/Interface access denied or unavailable.'); }
 });
 
@@ -532,7 +543,7 @@ document.getElementById('audio-device-select').addEventListener('change', async 
         micStream.disconnect();
         micStream = null;
         document.getElementById('btn-mic').classList.remove('active');
-        document.getElementById('btn-mic').click(); // Re-trigger with new device
+        document.getElementById('btn-mic').click();
     }
 });
 
